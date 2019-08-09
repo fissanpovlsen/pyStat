@@ -7,7 +7,7 @@ Created on Sun Apr 30 00:21:01 2017
 @author: rasmusmadsen
 """
 
-def gauss_chol(mu,C,r=1): # r has an equals to, since it is optional and the default value is 1
+def gauss_chol(mu,C,Nreal=1): # r has an equals to, since it is optional and the default value is 1
     """
     Computing one realization of discrete gaussian 
     random field using cholesky decomposition
@@ -27,7 +27,7 @@ def gauss_chol(mu,C,r=1): # r has an equals to, since it is optional and the def
     
     # 1. Compute M independent Gaussian random numbers ξi. 
     M = np.shape(C)
-    xi = np.random.randn(M[0],r)
+    xi = np.random.randn(M[0],Nreal)
     # 2. Compute the Cholesky factorisation of C and 
     #   store the factor L. 
     L = np.linalg.cholesky(C) 
