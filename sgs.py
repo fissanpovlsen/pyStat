@@ -23,59 +23,13 @@ The second point means that our data set for kriging increases by one data point
 """
 
 #%%
-import numpy as np
 import matplotlib.pyplot as plt
-import rasmus_py_funcs as rfuncs
+import numpy as np
+import GEUS_RESPROB.rasmus_py_funcs as rfuncs
 import scipy.stats as stats
 import scipy as sp
 import pykrige.kriging_tools as kt
 from pykrige.ok import OrdinaryKriging
-
-#import time
-#import scipy.stats
-#import scipy.optimize
-#import scipy.interpolate
-# 
-#import krige
-#import utilities
-# 
-#import random
-#
-def SVh( P, h, bw ):
-    from scipy.spatial.distance import pdist, squareform
-    '''
-    Experimental semivariogram for a single lag
-    '''
-    pd = squareform( pdist( P[:,:2] ) )
-    N = pd.shape[0]
-    Z = list()
-    for i in range(N):
-        for j in range(i+1,N):
-            if( pd[i,j] >= h-bw )and( pd[i,j] <= h+bw ):
-                Z.append( ( P[i,2] - P[j,2] )**2.0 )
-    return np.sum( Z ) / ( 2.0 * len( Z ) )
- 
-def SV( P, hs, bw ):
-    '''
-    Experimental variogram for a collection of lags
-    '''
-    sv = list()
-    for h in hs:
-        sv.append( SVh( P, h, bw ) )
-    sv = [ [ hs[i], sv[i] ] for i in range( len( hs ) ) if sv[i] > 0 ]
-    return np.array( sv ).T
- 
-def C( P, h, bw ):
-    '''
-    Calculate the sill
-    '''
-    c0 = np.var( P[:,2] )
-    if h == 0:
-        return c0
-    return c0 - SVh( P, h, bw )
-
-
-
 
 def calculate_cdf(d,num_bins=20):
     import numpy as np
@@ -105,55 +59,6 @@ def get_index_for_data_on_grid(data_sparse,data):
     non_duplicate = np.delete(np.arange(500),[duplicate]) # Non-duplicate index
     return non_duplicate,duplicate
     
-def opt( fct, x, y, C0, parameterRange=None, meshSize=1000 ):
-    if parameterRange == None:
-        parameterRange = [ x[1], x[-1] ]
-    mse = np.zeros( meshSize )
-    a = np.linspace( parameterRange[0], parameterRange[1], meshSize )
-    for i in range( meshSize ):
-        mse[i] = np.mean( ( y - fct( x, a[i], C0 ) )**2.0 )
-    return a[ mse.argmin() ]
-
-def spherical( h, a, C0 ):
-    '''
-    Spherical model of the semivariogram
-    '''
-    # if h is a single digit
-    if type(h) == np.float64:
-        # calculate the spherical function
-        if h <= a:
-            return C0*( 1.5*h/a - 0.5*(h/a)**3.0 )
-        else:
-            return C0
-    # if h is an iterable
-    else:
-        # calcualte the spherical function for all elements
-        a = np.ones( h.size ) * a
-        C0 = np.ones( h.size ) * C0
-        return map( spherical, h, a, C0 )
-
-
-def cvmodel( P, model, hs, bw ):
-    '''
-    Input:  (P)      ndarray, data
-            (model)  modeling function
-                      - spherical
-                      - exponential
-                      - gaussian
-            (hs)     distances
-            (bw)     bandwidth
-    Output: (covfct) function modeling the covariance
-    '''
-    # calculate the semivariogram
-    sv = SV( P, hs, bw )
-    # calculate the sill
-    C0 = C( P, hs[0], bw )
-    # calculate the optimal parameters
-    param = opt( model, sv[0], sv[1], C0 )
-    # return a covariance function
-    covfct = lambda h, a=param: C0 - model( h, a, C0 )
-    return covfct
-
 # Create some data for testing
 Nd = 500    
 
@@ -193,6 +98,18 @@ data_sparse[:,3] = sp.stats.zscore(data_sparse[:,2]) # Calculate z-score
 non_duplicate,duplicate = get_index_for_data_on_grid(data_sparse,data) # Getting indexes where there is no data
 randpath = np.random.permutation(non_duplicate) # randomize this array
 
+sim = np.zeros([np.size(randpath),3])
+
+kriging_points = data_sparse[:,0:3]
+
+for ii in range(np.size(randpath)):
+    OK = OrdinaryKriging(kriging_points[:, 0], kriging_points[:, 1], kriging_points[:, 2], variogram_model='gaussian',
+                     verbose=False, enable_plotting=False) # Ordinary kriging 
+    
+    sim[ii,0:2] = data[randpath[ii],0], data[randpath[ii],1]
+    sim[ii,2], ss = OK.execute('grid', sim[ii,0],sim[ii,1]) # Get value for point
+    
+    kriging_points = np.concatenate((data_sparse[:,0:3],sim),axis=0)
 
 
 # Calculate cdfs
@@ -202,15 +119,7 @@ cdf_data_sparse,bin_edges_sparse = calculate_cdf(data_sparse[:,2],num_bins=num_b
 cdf_data_z_sparse,bin_edges_z_sparse = calculate_cdf(data_sparse[:,3],num_bins=num_bins)
 
 
-plt.close(2)
-plt.figure(2)
 
-sp = cvmodel( data, model=spherical, hs=np.arange(0,50,5), bw=5 )
-plt.plot( sv[0], sv[1], '.-' )
-plt.plot( sv[0], sp( sv[0] ) ) ;
-plt.title('Spherical Model')
-plt.ylabel('Semivariance')
-plt.xlabel('Lag [m]')
 #savefig('semivariogram_model.png',fmt='png',dpi=200)
 
 #%%
@@ -236,15 +145,11 @@ plt.legend()
 
 
 plt.subplot(3,3,7)
-# bandwidth, plus or minus 250 meters
-bw = 5
-# lags in 500 meter increments from zero to 10,000
-hs = np.arange(0,50,bw)
-sv = SV( data, hs, bw )
-plt.plot( sv[0], 1-sv[1], '.-' )
-plt.xlabel('Lag [m]')
-plt.ylabel('Semivariance')
-plt.title('Sample Semivariogram') ;
+plt.scatter(sim[:,0],sim[:,1],c=sim[:,2],marker='.')
+plt.colorbar()
+plt.xlim([-1,20])
+plt.ylim([-1,25])
+plt.title('Full')
 
 
 plt.subplot(3,3,2)
@@ -263,13 +168,6 @@ plt.grid()
 plt.title('cdf')
 plt.legend()
 
-
-plt.subplot(3,3,8)
-sv_sparse = SV( data_sparse, hs, bw )
-plt.plot( sv_sparse[0], 1-sv_sparse[1], '.-' )
-plt.xlabel('Lag [m]')
-plt.ylabel('Semivariance')
-plt.title('Sample Semivariogram') ;
 
 
 plt.subplot(3,3,3)
