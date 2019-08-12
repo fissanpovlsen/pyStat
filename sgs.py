@@ -96,11 +96,13 @@ data_sparse[:,3] = sp.stats.zscore(data_sparse[:,2]) # Calculate z-score
 # 3. Visit the rest of the grid cells at random and perform kriging using all of the data available
 # Define random path
 non_duplicate,duplicate = get_index_for_data_on_grid(data_sparse,data) # Getting indexes where there is no data
-randpath = np.random.permutation(non_duplicate) # randomize this array
 
-sim = np.zeros([np.size(randpath),3])
+def sgs(datapoints,non_duplicate,Nsim=1):
+    randpath = np.random.permutation(non_duplicate) # randomize this array
 
-kriging_points = data_sparse[:,0:3]
+    sim = np.zeros([np.size(randpath),3,Nsim])
+
+    kriging_points = data_sparse[:,0:3]
 
 for ii in range(np.size(randpath)):
     OK = OrdinaryKriging(kriging_points[:, 0], kriging_points[:, 1], kriging_points[:, 2], variogram_model='gaussian',
@@ -128,7 +130,7 @@ cdf_data_z_sparse,bin_edges_z_sparse = calculate_cdf(data_sparse[:,3],num_bins=n
 plt.close(1)
 plt.figure(1)
 plt.subplot(3,3,1)
-plt.scatter(data[:,0],data[:,1],c=data[:,2],marker='.')
+plt.scatter(data[:,0],data[:,1],c=data[:,2],marker='.',s=100)
 plt.colorbar()
 plt.xlim([-1,20])
 plt.ylim([-1,25])
@@ -145,7 +147,8 @@ plt.legend()
 
 
 plt.subplot(3,3,7)
-plt.scatter(sim[:,0],sim[:,1],c=sim[:,2],marker='.')
+plt.scatter(sim[:,0],sim[:,1],c=sim[:,2],marker='.',s=100)
+plt.scatter(data_sparse[:,0],data_sparse[:,1],c=data_sparse[:,2],marker='.',s=200)
 plt.colorbar()
 plt.xlim([-1,20])
 plt.ylim([-1,25])
@@ -153,7 +156,7 @@ plt.title('Full')
 
 
 plt.subplot(3,3,2)
-plt.scatter(data_sparse[:,0],data_sparse[:,1],c=data_sparse[:,2],marker='.')
+plt.scatter(data_sparse[:,0],data_sparse[:,1],c=data_sparse[:,2],marker='.',s=100)
 plt.xlim([-1,20])
 plt.ylim([-1,25])
 plt.colorbar()
@@ -171,7 +174,7 @@ plt.legend()
 
 
 plt.subplot(3,3,3)
-plt.scatter(data_sparse[:,0],data_sparse[:,1],c=data_sparse[:,3],marker='.')
+plt.scatter(data_sparse[:,0],data_sparse[:,1],c=data_sparse[:,3],marker='.',s=100)
 plt.xlim([-1,20])
 plt.ylim([-1,25])
 plt.colorbar()
