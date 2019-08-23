@@ -43,7 +43,7 @@ def calculate_cdf(d,num_bins=20):
     #cdf[:,1] = 1-cdf[:,0]    
     return cdf,bin_edges
 
-def get_index_for_data_on_grid(data_sparse,x,y):
+def get_index_for_data_on_grid(data_sparse,xx,yy):
     k = 0
     grid_x = xx.flatten()
     grid_y = yy.flatten()
@@ -76,12 +76,12 @@ def get_index_to_nearest_neighbours(data_x,data_y,pt,k=10):
 def sgs(data_x,data_y,data_val,xx,yy,seed=1,k=10):
     
     kriging_points = np.array([data_x,data_y,data_val]).transpose()
-    
-    non_duplicate,duplicate = get_index_for_data_on_grid(kriging_points[:,0:2],x,y) # Getting indexes where there is no data
-    
+
     grid_x = xx.flatten()
     grid_y = yy.flatten()
-       
+    
+    non_duplicate,duplicate = get_index_for_data_on_grid(kriging_points[:,0:2],grid_x,grid_y) # Getting indexes where there is no data
+           
     # Define random path
     np.random.seed(seed) # Seeding
     randpath = np.random.permutation(non_duplicate) # randomize this array

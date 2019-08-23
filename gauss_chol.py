@@ -32,7 +32,7 @@ def gauss_chol(mu,C,Nreal=1): # r has an equals to, since it is optional and the
     #   store the factor L. 
     L = np.linalg.cholesky(C) 
     # 3. Compute a matrix-vector product with L.    
-    return mu+np.transpose(L).dot(xi)
+    return mu+np.transpose(L).dot(xi),L
     #Z = mu*np.transpose(L)*xi
     
 #function Z = gauss_chol(mu,C)
