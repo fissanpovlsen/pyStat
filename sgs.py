@@ -31,6 +31,7 @@ import scipy as sp
 import pykrige.kriging_tools as kt
 from pykrige.ok import OrdinaryKriging
 
+
 def calculate_cdf(d,num_bins=20):
     import numpy as np
     counts, bin_edges = np.histogram (d, bins=num_bins)
@@ -73,15 +74,21 @@ def get_index_to_nearest_neighbours(data_x,data_y,pt,k=10):
     return indexlist # Take k nearest neigbours
 
 # 3. Visit the rest of the grid cells at random and perform kriging using all of the data available
-def sgs(data_x,data_y,data_val,xx,yy,seed=1,k=10):
-    
+def sgs(data_x,data_y,data_val,xx,yy,var_params,var_mod,non_duplicate=0,seed=1,k=10):
+    from IPython.display import clear_output
+    print('Setting up random path....')
     kriging_points = np.array([data_x,data_y,data_val]).transpose()
 
     grid_x = xx.flatten()
     grid_y = yy.flatten()
     
-    non_duplicate,duplicate = get_index_for_data_on_grid(kriging_points[:,0:2],grid_x,grid_y) # Getting indexes where there is no data
-           
+    if isinstance(non_duplicate, np.ndarray):
+        print('List of non-duplicates exists!')
+    else:
+        print('Calculating list of non-duplicates, be patient!')
+        non_duplicate,duplicate = get_index_for_data_on_grid(kriging_points[:,0:2],grid_x,grid_y) # Getting indexes where there is no data
+                    
+       
     # Define random path
     np.random.seed(seed) # Seeding
     randpath = np.random.permutation(non_duplicate) # randomize this array
@@ -91,38 +98,56 @@ def sgs(data_x,data_y,data_val,xx,yy,seed=1,k=10):
     
     
     for ii in range(np.size(randpath)):
+
        # print(randpath[ii])
         sim[ii,0:2] = [grid_x[randpath[ii]], grid_y[randpath[ii]]] # Current point
         
         ind_neigh = get_index_to_nearest_neighbours(kriging_points[:, 0],kriging_points[:, 1],[(sim[ii,0],sim[ii,1])],k=k) # Get neighbours for current point
         #print(ind_neigh)
-        OK = OrdinaryKriging(kriging_points[ind_neigh, 0], kriging_points[ind_neigh, 1], kriging_points[ind_neigh, 2], variogram_model='gaussian',
-                     verbose=False, enable_plotting=False) # Ordinary kriging 
+        OK = OrdinaryKriging(kriging_points[ind_neigh, 0], kriging_points[ind_neigh, 1], 
+                             kriging_points[ind_neigh, 2], variogram_model=var_mod,
+                             variogram_parameters = var_params,
+                             verbose=False, enable_plotting=False) # Ordinary kriging 
     
-        
-        sim[ii,2], ss = OK.execute('grid', sim[ii,0],sim[ii,1]) # Get value for point
+        try:
+            sim[ii,2], ss = OK.execute('grid', sim[ii,0],sim[ii,1]) # Get value for point
+        except:
+            sim[ii,2] = 'NaN'
     
         #kriging_points = np.concatenate((data_sparse[:,0:3],sim),axis=0)
         kriging_points = np.append(kriging_points,sim[ii,0:3]).reshape((-1,3))
         #print(kriging_points)
+        if np.mod(ii,500) == 499:
+            clear_output(wait=True)
+            print('Current progress:',np.round(ii/np.size(randpath)*100,2),'%')
+        
+#        if np.mod(ii,100) == 99:
+#            print(str(round(ii/np.size(randpath)*100,2))+'%')
+    print(np.count_nonzero(np.isnan(sim)),'values could not be simulated')
     return sim,kriging_points
 
-def example(k=10,Nsim = 4):
+def example(k=10,Nsim = 4,var_params = [1,10,0],var_mod = 'spherical'):
+    """
+    Run example with k conditional points (k=10) and Nsim number of simulations (Nsim=4) 
+    Specify: var_params as list [Sill,range,nugget]
+             var_mod: type of variogram model (default = 'spherical')
+    """
     # Create some data for testing
-    Nd = 2000    
-    Nd_sparse = int(Nd/10)
+    
+    Nd = 1000    
+    Nd_sparse = int(Nd/6)
     
     d = np.ones(Nd)
-    d[0:400] = np.random.rand(400)+1
-    d[400:800] = np.random.rand(400)+2
-    d[800:1200] = np.random.rand(400)+3
-    d[1200:1600] = np.random.rand(400)+2
-    d[1600:2000] = np.random.rand(400)+1
+    d[0:200] = np.random.rand(200)+1
+    d[200:400] = np.random.rand(200)+2
+    d[400:600] = np.random.rand(200)+3
+    d[600:800] = np.random.rand(200)+2
+    d[800:1000] = np.random.rand(200)+1
     
     
     
     #### 1. Define a grid
-    Nx = 50
+    Nx = 25
     Ny = 40
     
     x = np.arange(0,Nx)
@@ -154,12 +179,13 @@ def example(k=10,Nsim = 4):
     data_val = data_sparse[:,2]
     
 
+
     sim = [[]]*Nsim
     # k: Number of nearest neighbours to be included in kriging
     for isim in range(Nsim):
         print('Running sim' + str(isim) + '.......', end="\r")
         rfuncs.tic()
-        sim[isim],kriging_points = sgs(data_x,data_y,data_val,xx,yy,seed=isim+1,k=k)
+        sim[isim],kriging_points = sgs(data_x,data_y,data_val,xx,yy,seed=isim+1,k=k,var_params=var_params,var_mod=var_mod)
         print('DONE!')
         rfuncs.toc()
     
