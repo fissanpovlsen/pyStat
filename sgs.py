@@ -91,18 +91,19 @@ def sgs(data_x,data_y,data_val,xx,yy,var_params,var_mod,non_duplicate=0,seed=1,k
        
     # Define random path
     np.random.seed(seed) # Seeding
-    randpath = np.random.permutation(non_duplicate) # randomize this array
+    rpath = np.random.permutation(non_duplicate.shape[0]) # Creating a random permutation of indexes
+    non_dup_perm = non_duplicate[rpath]
     
     # Preallocate memory
-    sim = np.zeros([np.size(randpath),3])
+    sim = np.zeros([np.size(rpath),3])
     
     
-    for ii in range(np.size(randpath)):
+    for ii in range(np.size(rpath)):
 
        # print(randpath[ii])
-        sim[ii,0:2] = [grid_x[randpath[ii]], grid_y[randpath[ii]]] # Current point
+        sim[rpath[ii],0:2] = [grid_x[non_dup_perm[ii]], grid_y[non_dup_perm[ii]]] # Current point
         
-        ind_neigh = get_index_to_nearest_neighbours(kriging_points[:, 0],kriging_points[:, 1],[(sim[ii,0],sim[ii,1])],k=k) # Get neighbours for current point
+        ind_neigh = get_index_to_nearest_neighbours(kriging_points[:, 0],kriging_points[:, 1],[(sim[rpath[ii],0],sim[rpath[ii],1])],k=k) # Get neighbours for current point
         #print(ind_neigh)
         OK = OrdinaryKriging(kriging_points[ind_neigh, 0], kriging_points[ind_neigh, 1], 
                              kriging_points[ind_neigh, 2], variogram_model=var_mod,
@@ -110,21 +111,21 @@ def sgs(data_x,data_y,data_val,xx,yy,var_params,var_mod,non_duplicate=0,seed=1,k
                              verbose=False, enable_plotting=False) # Ordinary kriging 
     
         try:
-            sim[ii,2], ss = OK.execute('grid', sim[ii,0],sim[ii,1]) # Get value for point
+            sim[rpath[ii],2], ss = OK.execute('grid', sim[rpath[ii],0],sim[rpath[ii],1]) # Get value for point
         except:
-            sim[ii,2] = 'NaN'
+            sim[rpath[ii],2] = 'NaN'
     
         #kriging_points = np.concatenate((data_sparse[:,0:3],sim),axis=0)
-        kriging_points = np.append(kriging_points,sim[ii,0:3]).reshape((-1,3))
+        kriging_points = np.append(kriging_points,sim[rpath[ii],0:3]).reshape((-1,3))
         #print(kriging_points)
         if np.mod(ii,500) == 499:
             clear_output(wait=True)
-            print('Current progress:',np.round(ii/np.size(randpath)*100,2),'%')
+            print('Current progress:',np.round(ii/np.size(rpath)*100,2),'%')
         
 #        if np.mod(ii,100) == 99:
 #            print(str(round(ii/np.size(randpath)*100,2))+'%')
     print(np.count_nonzero(np.isnan(sim)),'values could not be simulated')
-    return sim,kriging_points
+    return sim,kriging_points,rpath,non_duplicate
 
 def example(k=10,Nsim = 4,var_params = [1,10,0],var_mod = 'spherical'):
     """
