@@ -31,6 +31,11 @@ import scipy as sp
 import pykrige.kriging_tools as kt
 from pykrige.ok import OrdinaryKriging
 
+def remove_duplicate_coordinates_in_array(arr):
+    import pandas as pd
+    df = pd.DataFrame(arr)
+    unique_arr = df.drop_duplicates(subset=[0,1]).values #To return an array rather than a DataFrame object
+    return unique_arr
 
 def calculate_cdf(d,num_bins=20):
     import numpy as np
@@ -44,6 +49,7 @@ def calculate_cdf(d,num_bins=20):
     #cdf[:,1] = 1-cdf[:,0]    
     return cdf,bin_edges
 
+###### OBSOLETE?, slow and perhaps wrong!  #####
 def get_index_for_data_on_grid(data_sparse,xx,yy):
     k = 0
     grid_x = xx.flatten()
@@ -64,6 +70,17 @@ def get_index_for_data_on_grid(data_sparse,xx,yy):
     non_duplicate = np.delete(np.arange(Nd),[duplicate]) # Non-duplicate index
     return non_duplicate,duplicate
 
+def get_index_for_data_on_grid2(data,xx,yy):
+    coordinates = np.array([xx.flatten(),yy.flatten()]).transpose()
+    coordind_data = np.zeros(len(data))
+
+    for i in range(len(data)):
+        ind = (coordinates == data[i,0:2]).all(axis=1).nonzero()[0]
+        coordind_data[i] = ind
+    coordind_data = np.sort(coordind_data).astype('int16')
+    coordind_no_data = np.delete(np.arange(0,len(coordinates),1).astype('int16'),coordind_data)
+    return coordind_no_data,coordind_data
+
 def get_index_to_nearest_neighbours(data_x,data_y,pt,k=10):
     import scipy as sp
     import numpy as np
@@ -74,7 +91,7 @@ def get_index_to_nearest_neighbours(data_x,data_y,pt,k=10):
     return indexlist # Take k nearest neigbours
 
 # 3. Visit the rest of the grid cells at random and perform kriging using all of the data available
-def sgs(data_x,data_y,data_val,xx,yy,var_params,var_mod,non_duplicate=0,seed=1,k=10):
+def sgs(data_x,data_y,data_val,xx,yy,var_params,var_mod,coordind_no_data=0,seed=1,k=10):
     from IPython.display import clear_output
     print('Setting up random path....')
     kriging_points = np.array([data_x,data_y,data_val]).transpose()
@@ -82,17 +99,17 @@ def sgs(data_x,data_y,data_val,xx,yy,var_params,var_mod,non_duplicate=0,seed=1,k
     grid_x = xx.flatten()
     grid_y = yy.flatten()
     
-    if isinstance(non_duplicate, np.ndarray):
+    if isinstance(coordind_no_data, np.ndarray):
         print('List of non-duplicates exists!')
     else:
         print('Calculating list of non-duplicates, be patient!')
-        non_duplicate,duplicate = get_index_for_data_on_grid(kriging_points[:,0:2],grid_x,grid_y) # Getting indexes where there is no data
+        coordind_no_data,coordind_data = get_index_for_data_on_grid2(kriging_points[:,0:2],grid_x,grid_y) # Getting indexes where there is no data
                     
        
     # Define random path
     np.random.seed(seed) # Seeding
-    rpath = np.random.permutation(non_duplicate.shape[0]) # Creating a random permutation of indexes
-    non_dup_perm = non_duplicate[rpath]
+    rpath = np.random.permutation(coordind_no_data.shape[0]) # Creating a random permutation of indexes
+    non_dup_perm = coordind_no_data[rpath]
     
     # Preallocate memory
     sim = np.zeros([np.size(rpath),3])
@@ -125,7 +142,7 @@ def sgs(data_x,data_y,data_val,xx,yy,var_params,var_mod,non_duplicate=0,seed=1,k
 #        if np.mod(ii,100) == 99:
 #            print(str(round(ii/np.size(randpath)*100,2))+'%')
     print(np.count_nonzero(np.isnan(sim)),'values could not be simulated')
-    return sim,kriging_points,rpath,non_duplicate
+    return sim,kriging_points,rpath,coordind_no_data
 
 def example(k=10,Nsim = 4,var_params = [1,10,0],var_mod = 'spherical'):
     """
@@ -180,13 +197,15 @@ def example(k=10,Nsim = 4,var_params = [1,10,0],var_mod = 'spherical'):
     data_val = data_sparse[:,2]
     
 
+    coordind_no_data,coordind_data = get_index_for_data_on_grid2(np.array([data_x,data_y,data_val]).transpose(),xx,yy) # Getting indexes where there is no data
+
 
     sim = [[]]*Nsim
     # k: Number of nearest neighbours to be included in kriging
     for isim in range(Nsim):
         print('Running sim' + str(isim) + '.......', end="\r")
         rfuncs.tic()
-        sim[isim],kriging_points = sgs(data_x,data_y,data_val,xx,yy,seed=isim+1,k=k,var_params=var_params,var_mod=var_mod)
+        sim[isim],kriging_points,_,coordind_no_data = sgs(data_x,data_y,data_val,xx,yy,seed=isim+1,coordind_no_data=coordind_no_data,k=k,var_params=var_params,var_mod=var_mod)
         print('DONE!')
         rfuncs.toc()
     
