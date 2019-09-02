@@ -73,7 +73,6 @@ def get_index_for_data_on_grid(data_sparse,xx,yy):
 def get_index_for_data_on_grid2(data,xx,yy):
     coordinates = np.array([xx.flatten(),yy.flatten()]).transpose()
     coordind_data = np.zeros(len(data))
-
     for i in range(len(data)):
         ind = (coordinates == data[i,0:2]).all(axis=1).nonzero()[0]
         coordind_data[i] = ind
@@ -88,7 +87,7 @@ def get_index_to_nearest_neighbours(data_x,data_y,pt,k=10):
     data_coords = np.array([data_x,data_y]).transpose()
     hej = sp.spatial.distance.cdist(data_coords,pt,'euclidean')
     indexlist = np.argsort(hej,axis=0)[0:k] # Sort indexes of list 
-    return indexlist # Take k nearest neigbours
+    return indexlist,hej[indexlist] # Take k nearest neigbours
 
 # 3. Visit the rest of the grid cells at random and perform kriging using all of the data available
 def sgs(data_x,data_y,data_val,xx,yy,var_params,var_mod,coordind_no_data=0,seed=1,k=10):
@@ -111,7 +110,7 @@ def sgs(data_x,data_y,data_val,xx,yy,var_params,var_mod,coordind_no_data=0,seed=
     rpath = np.random.permutation(coordind_no_data.shape[0]) # Creating a random permutation of indexes
     non_dup_perm = coordind_no_data[rpath]
     
-    # Preallocate memory
+    # Preallocate memory for simulations
     sim = np.zeros([np.size(rpath),3])
     
     
@@ -120,15 +119,20 @@ def sgs(data_x,data_y,data_val,xx,yy,var_params,var_mod,coordind_no_data=0,seed=
        # print(randpath[ii])
         sim[rpath[ii],0:2] = [grid_x[non_dup_perm[ii]], grid_y[non_dup_perm[ii]]] # Current point
         
-        ind_neigh = get_index_to_nearest_neighbours(kriging_points[:, 0],kriging_points[:, 1],[(sim[rpath[ii],0],sim[rpath[ii],1])],k=k) # Get neighbours for current point
-        #print(ind_neigh)
-        OK = OrdinaryKriging(kriging_points[ind_neigh, 0], kriging_points[ind_neigh, 1], 
-                             kriging_points[ind_neigh, 2], variogram_model=var_mod,
+        ind_neigh,dist_neigh = get_index_to_nearest_neighbours(kriging_points[:, 0],kriging_points[:, 1],[(sim[rpath[ii],0],sim[rpath[ii],1])],k=k) # Get neighbours for current point
+        effective_neigh = int(sum(dist_neigh<3))
+        if effective_neigh < 3:
+            effective_neigh = 3
+        effective_neigh = k            
+        OK = OrdinaryKriging(kriging_points[ind_neigh[0:effective_neigh], 0], kriging_points[ind_neigh[0:effective_neigh], 1], 
+                             kriging_points[ind_neigh[0:effective_neigh], 2], variogram_model=var_mod,
                              variogram_parameters = var_params,
                              verbose=False, enable_plotting=False) # Ordinary kriging 
     
         try:
-            sim[rpath[ii],2], ss = OK.execute('grid', sim[rpath[ii],0],sim[rpath[ii],1]) # Get value for point
+            z, ss = OK.execute('grid', sim[rpath[ii],0],sim[rpath[ii],1]) # Get value for point
+            #print(ss)
+            sim[rpath[ii],2] = np.random.randn(1)*np.sqrt(ss)+z # Drawing random sample from local Gaussian distribution
         except:
             sim[rpath[ii],2] = 'NaN'
     
